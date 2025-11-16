@@ -202,15 +202,15 @@ Cost optimization tips:
 
 ## Security Features
 
-- ✅ Private subnets for ECS tasks
-- ✅ Security groups with least privilege
-- ✅ IAM task roles (no hardcoded credentials)
-- ✅ ECR image scanning enabled
-- ✅ CloudWatch logs encrypted
-- ✅ S3 backend encryption
-- ✅ Secrets Manager for sensitive data
-- ✅ AWS WAF on ALB
-- ✅ HTTPS support (configure ACM certificate)
+-  Private subnets for ECS tasks
+-  Security groups with least privilege
+-  IAM task roles (no hardcoded credentials)
+-  ECR image scanning enabled
+-  CloudWatch logs encrypted
+-  S3 backend encryption
+-  Secrets Manager for sensitive data
+-  AWS WAF on ALB
+-  HTTPS support (configure ACM certificate)
 
 ## Scaling Configuration
 
