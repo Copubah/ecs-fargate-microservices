@@ -3,8 +3,12 @@ name: Deploy to ECS
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1

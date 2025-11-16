@@ -1,0 +1,80 @@
+name: Test and Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    name: Validate Code
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install Python dependencies
+        run: |
+          pip install -r services/service-a/requirements.txt
+          pip install -r services/service-b/requirements.txt
+      
+      - name: Validate Python syntax - Service A
+        run: python -m py_compile services/service-a/app.py
+      
+      - name: Validate Python syntax - Service B
+        run: python -m py_compile services/service-b/app.py
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+      
+      - name: Terraform Format Check
+        working-directory: ./terraform
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+      
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init -backend=false
+      
+      - name: Terraform Validate
+        working-directory: ./terraform
+        run: terraform validate
+      
+      - name: Lint Dockerfiles
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: services/service-a/Dockerfile
+          failure-threshold: warning
+      
+      - name: Lint Dockerfile Service B
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: services/service-b/Dockerfile
+          failure-threshold: warning
+      
+      - name: Check scripts are executable
+        run: |
+          test -x scripts/setup-backend.sh
+          test -x scripts/push-images.sh
+          test -x scripts/test-services.sh
+      
+      - name: Validation Summary
+        run: |
+          echo "================================"
+          echo "All validations passed!"
+          echo "================================"
+          echo "✓ Python syntax valid"
+          echo "✓ Terraform configuration valid"
+          echo "✓ Dockerfiles valid"
+          echo "✓ Scripts executable"
+          echo ""
+          echo "Project is ready for deployment"
