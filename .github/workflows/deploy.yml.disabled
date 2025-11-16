@@ -1,0 +1,134 @@
+# This workflow is disabled until infrastructure is deployed
+# Rename to deploy.yml after completing initial setup
+
+name: Deploy to ECS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+  PROJECT_NAME: ecs-microservices
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ env.PROJECT_NAME }}-production-github-actions
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build and push Service A
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/service-a
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}-service-a:latest
+            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}-service-a:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Build and push Service B
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/service-b
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}-service-b:latest
+            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}-service-b:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Scan Service A image
+        if: github.event_name != 'pull_request'
+        run: |
+          aws ecr start-image-scan \
+            --repository-name ${{ env.PROJECT_NAME }}-service-a \
+            --image-id imageTag=latest \
+            --region ${{ secrets.AWS_REGION }}
+      
+      - name: Scan Service B image
+        if: github.event_name != 'pull_request'
+        run: |
+          aws ecr start-image-scan \
+            --repository-name ${{ env.PROJECT_NAME }}-service-b \
+            --image-id imageTag=latest \
+            --region ${{ secrets.AWS_REGION }}
+      
+      - name: Setup Terraform
+        if: github.event_name != 'pull_request'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+      
+      - name: Terraform Init
+        if: github.event_name != 'pull_request'
+        working-directory: ./terraform
+        run: terraform init
+      
+      - name: Terraform Plan
+        if: github.event_name != 'pull_request'
+        working-directory: ./terraform
+        run: terraform plan -out=tfplan
+      
+      - name: Terraform Apply
+        if: github.event_name != 'pull_request'
+        working-directory: ./terraform
+        run: terraform apply -auto-approve tfplan
+      
+      - name: Update ECS Service A
+        if: github.event_name != 'pull_request'
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.PROJECT_NAME }}-production-cluster \
+            --service ${{ env.PROJECT_NAME }}-service-a \
+            --force-new-deployment \
+            --region ${{ secrets.AWS_REGION }}
+      
+      - name: Update ECS Service B
+        if: github.event_name != 'pull_request'
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.PROJECT_NAME }}-production-cluster \
+            --service ${{ env.PROJECT_NAME }}-service-b \
+            --force-new-deployment \
+            --region ${{ secrets.AWS_REGION }}
+      
+      - name: Wait for Service A stability
+        if: github.event_name != 'pull_request'
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ env.PROJECT_NAME }}-production-cluster \
+            --services ${{ env.PROJECT_NAME }}-service-a \
+            --region ${{ secrets.AWS_REGION }}
+      
+      - name: Wait for Service B stability
+        if: github.event_name != 'pull_request'
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ env.PROJECT_NAME }}-production-cluster \
+            --services ${{ env.PROJECT_NAME }}-service-b \
+            --region ${{ secrets.AWS_REGION }}
