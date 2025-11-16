@@ -1,7 +1,7 @@
 # SNS Topic for Alarms
 resource "aws_sns_topic" "alarms" {
   name = "${var.project_name}-${var.environment}-alarms"
-  
+
   tags = {
     Name = "${var.project_name}-${var.environment}-alarms"
   }
@@ -17,7 +17,7 @@ resource "aws_sns_topic_subscription" "alarms_email" {
 # CloudWatch Dashboard
 resource "aws_cloudwatch_dashboard" "main" {
   dashboard_name = "${var.project_name}-${var.environment}"
-  
+
   dashboard_body = jsonencode({
     widgets = [
       {
@@ -78,7 +78,7 @@ resource "aws_cloudwatch_metric_alarm" "service_a_cpu" {
   threshold           = 80
   alarm_description   = "Service A CPU utilization is too high"
   alarm_actions       = [aws_sns_topic.alarms.arn]
-  
+
   dimensions = {
     ClusterName = var.ecs_cluster_name
     ServiceName = var.ecs_service_a_name
@@ -97,7 +97,7 @@ resource "aws_cloudwatch_metric_alarm" "service_a_memory" {
   threshold           = 80
   alarm_description   = "Service A memory utilization is too high"
   alarm_actions       = [aws_sns_topic.alarms.arn]
-  
+
   dimensions = {
     ClusterName = var.ecs_cluster_name
     ServiceName = var.ecs_service_a_name
@@ -116,7 +116,7 @@ resource "aws_cloudwatch_metric_alarm" "service_b_cpu" {
   threshold           = 80
   alarm_description   = "Service B CPU utilization is too high"
   alarm_actions       = [aws_sns_topic.alarms.arn]
-  
+
   dimensions = {
     ClusterName = var.ecs_cluster_name
     ServiceName = var.ecs_service_b_name
@@ -135,7 +135,7 @@ resource "aws_cloudwatch_metric_alarm" "service_b_memory" {
   threshold           = 80
   alarm_description   = "Service B memory utilization is too high"
   alarm_actions       = [aws_sns_topic.alarms.arn]
-  
+
   dimensions = {
     ClusterName = var.ecs_cluster_name
     ServiceName = var.ecs_service_b_name
@@ -155,7 +155,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
   alarm_description   = "ALB is returning too many 5xx errors"
   alarm_actions       = [aws_sns_topic.alarms.arn]
   treat_missing_data  = "notBreaching"
-  
+
   dimensions = {
     LoadBalancer = var.alb_arn_suffix
   }
@@ -173,7 +173,7 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_targets_a" {
   threshold           = 0
   alarm_description   = "Service A has unhealthy targets"
   alarm_actions       = [aws_sns_topic.alarms.arn]
-  
+
   dimensions = {
     TargetGroup  = var.target_group_a_arn_suffix
     LoadBalancer = var.alb_arn_suffix
@@ -192,7 +192,7 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_targets_b" {
   threshold           = 0
   alarm_description   = "Service B has unhealthy targets"
   alarm_actions       = [aws_sns_topic.alarms.arn]
-  
+
   dimensions = {
     TargetGroup  = var.target_group_b_arn_suffix
     LoadBalancer = var.alb_arn_suffix

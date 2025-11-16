@@ -1,12 +1,12 @@
 # ECS Cluster
 resource "aws_ecs_cluster" "main" {
   name = "${var.project_name}-${var.environment}-cluster"
-  
+
   setting {
     name  = "containerInsights"
     value = "enabled"
   }
-  
+
   tags = {
     Name = "${var.project_name}-${var.environment}-cluster"
   }
@@ -16,14 +16,14 @@ resource "aws_ecs_cluster" "main" {
 resource "aws_cloudwatch_log_group" "service_a" {
   name              = "/ecs/${var.project_name}-service-a"
   retention_in_days = 7
-  
+
   kms_key_id = aws_kms_key.logs.arn
 }
 
 resource "aws_cloudwatch_log_group" "service_b" {
   name              = "/ecs/${var.project_name}-service-b"
   retention_in_days = 7
-  
+
   kms_key_id = aws_kms_key.logs.arn
 }
 
@@ -32,7 +32,7 @@ resource "aws_kms_key" "logs" {
   description             = "KMS key for CloudWatch Logs encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -73,7 +73,7 @@ resource "aws_security_group" "ecs_tasks" {
   name        = "${var.project_name}-${var.environment}-ecs-tasks-sg"
   description = "Security group for ECS tasks"
   vpc_id      = var.vpc_id
-  
+
   ingress {
     from_port       = 8000
     to_port         = 8000
@@ -81,7 +81,7 @@ resource "aws_security_group" "ecs_tasks" {
     security_groups = [var.alb_security_group_id]
     description     = "Allow from ALB to Service A"
   }
-  
+
   ingress {
     from_port       = 8001
     to_port         = 8001
@@ -89,7 +89,7 @@ resource "aws_security_group" "ecs_tasks" {
     security_groups = [var.alb_security_group_id]
     description     = "Allow from ALB to Service B"
   }
-  
+
   ingress {
     from_port   = 8001
     to_port     = 8001
@@ -97,7 +97,7 @@ resource "aws_security_group" "ecs_tasks" {
     self        = true
     description = "Allow Service A to Service B"
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -105,7 +105,7 @@ resource "aws_security_group" "ecs_tasks" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow all outbound"
   }
-  
+
   tags = {
     Name = "${var.project_name}-${var.environment}-ecs-tasks-sg"
   }
@@ -120,21 +120,21 @@ resource "aws_ecs_task_definition" "service_a" {
   memory                   = var.service_a_memory
   execution_role_arn       = var.task_execution_role_arn
   task_role_arn            = var.task_role_arn
-  
+
   container_definitions = jsonencode([{
     name  = "service-a"
     image = var.service_a_image
-    
+
     portMappings = [{
       containerPort = 8000
       protocol      = "tcp"
     }]
-    
+
     environment = [{
       name  = "SERVICE_B_URL"
       value = "http://service-b.local:8001"
     }]
-    
+
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -143,7 +143,7 @@ resource "aws_ecs_task_definition" "service_a" {
         "awslogs-stream-prefix" = "ecs"
       }
     }
-    
+
     healthCheck = {
       command     = ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval    = 30
@@ -163,16 +163,16 @@ resource "aws_ecs_task_definition" "service_b" {
   memory                   = var.service_b_memory
   execution_role_arn       = var.task_execution_role_arn
   task_role_arn            = var.task_role_arn
-  
+
   container_definitions = jsonencode([{
     name  = "service-b"
     image = var.service_b_image
-    
+
     portMappings = [{
       containerPort = 8001
       protocol      = "tcp"
     }]
-    
+
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -181,7 +181,7 @@ resource "aws_ecs_task_definition" "service_b" {
         "awslogs-stream-prefix" = "ecs"
       }
     }
-    
+
     healthCheck = {
       command     = ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
       interval    = 30
@@ -201,16 +201,16 @@ resource "aws_service_discovery_private_dns_namespace" "main" {
 # Service Discovery for Service B
 resource "aws_service_discovery_service" "service_b" {
   name = "service-b"
-  
+
   dns_config {
     namespace_id = aws_service_discovery_private_dns_namespace.main.id
-    
+
     dns_records {
       ttl  = 10
       type = "A"
     }
   }
-  
+
   health_check_custom_config {
     failure_threshold = 1
   }
@@ -223,19 +223,19 @@ resource "aws_ecs_service" "service_a" {
   task_definition = aws_ecs_task_definition.service_a.arn
   desired_count   = 2
   launch_type     = "FARGATE"
-  
+
   network_configuration {
     subnets          = var.private_subnets
     security_groups  = [aws_security_group.ecs_tasks.id]
     assign_public_ip = false
   }
-  
+
   load_balancer {
     target_group_arn = var.alb_target_group_a_arn
     container_name   = "service-a"
     container_port   = 8000
   }
-  
+
   depends_on = [var.alb_target_group_a_arn]
 }
 
@@ -246,23 +246,23 @@ resource "aws_ecs_service" "service_b" {
   task_definition = aws_ecs_task_definition.service_b.arn
   desired_count   = 2
   launch_type     = "FARGATE"
-  
+
   network_configuration {
     subnets          = var.private_subnets
     security_groups  = [aws_security_group.ecs_tasks.id]
     assign_public_ip = false
   }
-  
+
   load_balancer {
     target_group_arn = var.alb_target_group_b_arn
     container_name   = "service-b"
     container_port   = 8001
   }
-  
+
   service_registries {
     registry_arn = aws_service_discovery_service.service_b.arn
   }
-  
+
   depends_on = [var.alb_target_group_b_arn]
 }
 
@@ -282,7 +282,7 @@ resource "aws_appautoscaling_policy" "service_a_cpu" {
   resource_id        = aws_appautoscaling_target.service_a.resource_id
   scalable_dimension = aws_appautoscaling_target.service_a.scalable_dimension
   service_namespace  = aws_appautoscaling_target.service_a.service_namespace
-  
+
   target_tracking_scaling_policy_configuration {
     predefined_metric_specification {
       predefined_metric_type = "ECSServiceAverageCPUUtilization"
@@ -298,7 +298,7 @@ resource "aws_appautoscaling_policy" "service_a_memory" {
   resource_id        = aws_appautoscaling_target.service_a.resource_id
   scalable_dimension = aws_appautoscaling_target.service_a.scalable_dimension
   service_namespace  = aws_appautoscaling_target.service_a.service_namespace
-  
+
   target_tracking_scaling_policy_configuration {
     predefined_metric_specification {
       predefined_metric_type = "ECSServiceAverageMemoryUtilization"
@@ -323,7 +323,7 @@ resource "aws_appautoscaling_policy" "service_b_cpu" {
   resource_id        = aws_appautoscaling_target.service_b.resource_id
   scalable_dimension = aws_appautoscaling_target.service_b.scalable_dimension
   service_namespace  = aws_appautoscaling_target.service_b.service_namespace
-  
+
   target_tracking_scaling_policy_configuration {
     predefined_metric_specification {
       predefined_metric_type = "ECSServiceAverageCPUUtilization"
@@ -339,7 +339,7 @@ resource "aws_appautoscaling_policy" "service_b_memory" {
   resource_id        = aws_appautoscaling_target.service_b.resource_id
   scalable_dimension = aws_appautoscaling_target.service_b.scalable_dimension
   service_namespace  = aws_appautoscaling_target.service_b.service_namespace
-  
+
   target_tracking_scaling_policy_configuration {
     predefined_metric_specification {
       predefined_metric_type = "ECSServiceAverageMemoryUtilization"
